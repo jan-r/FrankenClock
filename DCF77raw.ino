@@ -37,12 +37,16 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, DISP_CLOCK, DISP_DATA, U8X8_PI
 // - 16 seconds == 16 * 13 byte == 208 byte
 #define NUM_LINES         16
 
+#define NOT_SYNCED  255
+
 uint8_t recvd_bits[BYTE_PER_LINE * NUM_LINES];
 uint8_t bitsums[100];
 uint8_t convolution[100];
 volatile uint8_t isr_counter;
 uint16_t line_start;
+volatile uint8_t sampling_offset = NOT_SYNCED;
 volatile bool recording;
+volatile bool write_millis = false;
 
 // ----------------------------------------------------------------------------
 // Setup
@@ -98,7 +102,20 @@ void drawBuffer(void)
 // -------------------------------------------------------------------
 ISR(TIMER1_COMPA_vect)
 {
-  if (recording)
+  static bool is_recording = false;
+
+  // synchronize recording with isr_counter overflow
+  if (!is_recording && (isr_counter == 0) && (recording == true))
+  {
+    is_recording = true;
+  }
+
+  if (isr_counter == 0)
+  {
+    write_millis = true;
+  }
+  
+  if (is_recording)
   {
     if (digitalRead(DCF77SIGNALPIN))
     {
@@ -106,14 +123,6 @@ ISR(TIMER1_COMPA_vect)
       uint8_t bitidx = isr_counter & 0x07;
       recvd_bits[line_start + byteidx] |= 1 << bitidx;
     }
-    //digitalWrite(DBGLEDPIN, HIGH);
-    //Serial.write('1');
-    
-  }
-  //else
-  {
-    //digitalWrite(DBGLEDPIN, LOW);
-    //Serial.write('0');
   }
 
   // keep track of our position within a one second period
@@ -124,9 +133,40 @@ ISR(TIMER1_COMPA_vect)
     line_start += BYTE_PER_LINE;
     if (line_start >= sizeof(recvd_bits))
     {
+      is_recording = false;
       recording = false;
     }
   }
+
+  // when synced, show our sampling window on the LED
+  #if 1
+  if (sampling_offset != NOT_SYNCED)
+  {
+    int8_t local_sampling_offset = sampling_offset;
+    if (local_sampling_offset >= BITS_PER_LINE - 20)
+    {
+      local_sampling_offset -= BITS_PER_LINE;
+    }
+    int8_t sampling_end = local_sampling_offset + 20;
+    int8_t local_isr_counter = isr_counter;
+    if (local_isr_counter >= BITS_PER_LINE - 20)
+    {
+      local_isr_counter -= BITS_PER_LINE;
+    }
+    if ((local_isr_counter >= local_sampling_offset) && (local_isr_counter < sampling_end))
+    {
+      digitalWrite(DBGLEDPIN, HIGH);
+    }
+    else
+    {
+      digitalWrite(DBGLEDPIN, LOW);
+    }
+  }
+  else
+  {
+    digitalWrite(DBGLEDPIN, LOW);
+  }
+  #endif
 
 }
 
@@ -155,18 +195,18 @@ void convolute(void)
     for (uint8_t convidx = 0; convidx < 10; convidx++)
     {
       uint8_t localidx = idx + convidx;
-      if (localidx > 99)
+      if (localidx >= BITS_PER_LINE)
       {
-        localidx -= 100;
+        localidx -= BITS_PER_LINE;
       }
       sum += bitsums[localidx] << 1;
     }
     for (uint8_t convidx = 10; convidx < 20; convidx++)
     {
       uint8_t localidx = idx + convidx;
-      if (localidx > 99)
+      if (localidx >= BITS_PER_LINE)
       {
-        localidx -= 100;
+        localidx -= BITS_PER_LINE;
       }
       sum += bitsums[localidx];
     }
@@ -195,7 +235,7 @@ void drawConvolution(uint16_t y)
 uint8_t findConvolutionMax()
 {
   uint16_t maxvalue = 0;
-  uint8_t maxidx;
+  uint8_t maxidx = 0;
   for (uint8_t idx = 0; idx < BITS_PER_LINE; idx++)
   {
     if (convolution[idx] > maxvalue)
@@ -231,11 +271,26 @@ void loop()
   recording = true;
   while (recording)
   {
+    if (write_millis)
+    {
+      write_millis = false;
+      //Serial.println(millis());
+    }
   }
-  writeBuffer();
+  //writeBuffer();
   calcSums();
   convolute();
+  Serial.write('s');
+  Serial.println(millis());
   drawBuffer();
+  Serial.write('e');
+  Serial.println(millis());
+  uint8_t conv_max = findConvolutionMax();
+  noInterrupts();
+  sampling_offset = conv_max;
+  interrupts();
+  Serial.print("offset: ");
+  Serial.println(sampling_offset, DEC);
   clearBuffer();
 
 }
