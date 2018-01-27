@@ -39,15 +39,16 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, DISP_CLOCK, DISP_DATA, U8X8_PI
 
 uint8_t recvd_bits[BYTE_PER_LINE * NUM_LINES];
 uint8_t bitsums[100];
-
+uint8_t convolution[100];
+volatile uint8_t isr_counter;
 uint16_t line_start;
-uint8_t bit_in_line;
 volatile bool recording;
 
 // ----------------------------------------------------------------------------
 // Setup
 // ----------------------------------------------------------------------------
-void setup() {
+void setup()
+{
   u8g2.begin();
 
   
@@ -78,7 +79,7 @@ void clearBuffer(void)
 {
   recording = false;
   memset(recvd_bits, 0, sizeof(recvd_bits));
-  bit_in_line = 0;
+  isr_counter = 0;
   line_start = 0;
 }
 
@@ -88,28 +89,22 @@ void drawBuffer(void)
   do {
     u8g2.drawXBM(0, 0, 100, 16, recvd_bits);
     drawSums(20);
+    drawConvolution(42);
   } while ( u8g2.nextPage() );
 }
 
+// -------------------------------------------------------------------
+// Cyclic sampling ISR
+// -------------------------------------------------------------------
 ISR(TIMER1_COMPA_vect)
 {
   if (recording)
   {
     if (digitalRead(DCF77SIGNALPIN))
     {
-      uint8_t byteidx = bit_in_line >> 3;
-      uint8_t bitidx = bit_in_line & 0x07;
+      uint8_t byteidx = isr_counter >> 3;
+      uint8_t bitidx = isr_counter & 0x07;
       recvd_bits[line_start + byteidx] |= 1 << bitidx;
-    }
-    bit_in_line++;
-    if (bit_in_line >= BITS_PER_LINE)
-    {
-      bit_in_line = 0;
-      line_start += BYTE_PER_LINE;
-      if (line_start >= sizeof(recvd_bits))
-      {
-        recording = false;
-      }
     }
     //digitalWrite(DBGLEDPIN, HIGH);
     //Serial.write('1');
@@ -120,6 +115,19 @@ ISR(TIMER1_COMPA_vect)
     //digitalWrite(DBGLEDPIN, LOW);
     //Serial.write('0');
   }
+
+  // keep track of our position within a one second period
+  isr_counter++;
+  if (isr_counter >= BITS_PER_LINE)
+  {
+    isr_counter = 0;
+    line_start += BYTE_PER_LINE;
+    if (line_start >= sizeof(recvd_bits))
+    {
+      recording = false;
+    }
+  }
+
 }
 
 void calcSums(void)
@@ -139,6 +147,33 @@ void calcSums(void)
   }
 }
 
+void convolute(void)
+{
+  for (uint8_t idx = 0; idx < BITS_PER_LINE; idx++)
+  {
+    uint16_t sum = 0;
+    for (uint8_t convidx = 0; convidx < 10; convidx++)
+    {
+      uint8_t localidx = idx + convidx;
+      if (localidx > 99)
+      {
+        localidx -= 100;
+      }
+      sum += bitsums[localidx] << 1;
+    }
+    for (uint8_t convidx = 10; convidx < 20; convidx++)
+    {
+      uint8_t localidx = idx + convidx;
+      if (localidx > 99)
+      {
+        localidx -= 100;
+      }
+      sum += bitsums[localidx];
+    }
+    convolution[idx] = sum >> 1;
+  }
+}
+
 void drawSums(uint16_t y)
 {
   uint16_t base = y + 20;
@@ -146,6 +181,30 @@ void drawSums(uint16_t y)
   {
     u8g2.drawPixel(x, base - bitsums[x]);
   }
+}
+
+void drawConvolution(uint16_t y)
+{
+  uint16_t base = y + 20;
+  for (uint16_t x = 0; x < 100; x++)
+  {
+    u8g2.drawPixel(x, base - (convolution[x] >> 4));
+  }
+}
+
+uint8_t findConvolutionMax()
+{
+  uint16_t maxvalue = 0;
+  uint8_t maxidx;
+  for (uint8_t idx = 0; idx < BITS_PER_LINE; idx++)
+  {
+    if (convolution[idx] > maxvalue)
+    {
+      maxvalue = convolution[idx];
+      maxidx = idx;
+    }
+  }
+  return maxidx;
 }
 
 void writeBuffer(void)
@@ -163,15 +222,21 @@ void writeBuffer(void)
     Serial.write('\n');
   }
 }
-void loop() {
+
+// -------------------------------------------------------------------
+// Main loop
+// -------------------------------------------------------------------
+void loop()
+{
   recording = true;
   while (recording)
   {
   }
   writeBuffer();
   calcSums();
+  convolute();
   drawBuffer();
   clearBuffer();
-  // put your main code here, to run repeatedly:
+
 }
 
