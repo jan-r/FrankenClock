@@ -181,10 +181,10 @@ ISR(TIMER1_COMPA_vect)
 }
 #endif
 
-
-#if 0
-void calcSums(void)
+void calcSums(uint8_t buf)
 {
+  uint8_t *pBuffer = Bits.getBuffer(buf);
+  
   for (uint8_t index = 0; index < BITS_PER_LINE; index++)
   {
     uint8_t byteidx = index >> 3;
@@ -192,14 +192,14 @@ void calcSums(void)
     bitsums[index] = 0;
     for (uint16_t line = 0; line < NUM_LINES * BYTE_PER_LINE; line+=BYTE_PER_LINE)
     {
-      if (recvd_bits[line + byteidx] & (1 << bitidx))
+      if (pBuffer[line + byteidx] & (1 << bitidx))
       {
         bitsums[index]++;
       }
     }
   }
 }
-#endif
+
 void convolute(void)
 {
   for (uint8_t idx = 0; idx < BITS_PER_LINE; idx++)
@@ -223,7 +223,7 @@ void convolute(void)
       }
       sum += bitsums[localidx];
     }
-    convolution[idx] = sum >> 1;
+    convolution[idx] = sum;
   }
 }
 
@@ -286,12 +286,28 @@ void loop()
   uint8_t activeBuffer = Bits.getActiveBuffer();
   if (activeBuffer != lastBuffer)
   {
+    calcSums(lastBuffer);
+    convolute();
+    uint8_t m = findConvolutionMax();
+    uint8_t m_ = m+20;
+    if (m_ >= 100)
+      m_ -= 100;
     u8g2.firstPage();
+    u8g2.setFont(u8g2_font_5x7_tf);
     do
     {
-      u8g2.drawXBM(0, lastBuffer << 4, 100, 8, Bits.getBuffer(lastBuffer));
+      u8g2.drawXBM(0, lastBuffer << 3, 100, 8, Bits.getBuffer(lastBuffer));
+      drawConvolution(20);
+      u8g2.setCursor(2,50);
+      u8g2.print(m);
+      u8g2.drawVLine(m, 17, 5);
+      u8g2.drawVLine(m_, 17, 5);
+      u8g2.drawPixel(m+1, 19);
+      u8g2.drawPixel(m_-1, 19);
     } while ( u8g2.nextPage() );
 
+   
+    
     lastBuffer = activeBuffer;
   }
   
