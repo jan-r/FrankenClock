@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 
+#include "Sampler.h"
+
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
 #endif
@@ -22,6 +24,8 @@
 
 #define SERIAL_BAUDRATE   115200
 
+Sampler Bits(DCF77SIGNALPIN);
+
 // ----------------------------------------------------------------------------
 // Display
 // ----------------------------------------------------------------------------
@@ -39,11 +43,8 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, DISP_CLOCK, DISP_DATA, U8X8_PI
 
 #define NOT_SYNCED  255
 
-uint8_t recvd_bits[BYTE_PER_LINE * NUM_LINES];
 uint8_t bitsums[100];
 uint8_t convolution[100];
-volatile uint8_t isr_counter;
-uint16_t line_start;
 volatile uint8_t sampling_offset = NOT_SYNCED;
 volatile bool recording;
 volatile bool write_millis = false;
@@ -67,8 +68,6 @@ void setup()
   delay(1000);
   digitalWrite(DCF77POWERPIN, LOW);
 
-  clearBuffer();
-
   noInterrupts();
   TCCR1A = 0;
   TCCR1B = (1 << WGM12); // enable CTC mode
@@ -77,8 +76,12 @@ void setup()
   TCCR1B |= (1 << CS11); // prescaler *8
   TIMSK1 |= (1 << OCIE1A);  // enable compare interrupt
   interrupts();
+
+//  clearBuffer();
+
 }
 
+#if 0
 void clearBuffer(void)
 {
   recording = false;
@@ -96,10 +99,17 @@ void drawBuffer(void)
     drawConvolution(42);
   } while ( u8g2.nextPage() );
 }
+#endif 
 
 // -------------------------------------------------------------------
 // Cyclic sampling ISR
 // -------------------------------------------------------------------
+ISR(TIMER1_COMPA_vect)
+{
+  Bits.sample();
+}
+
+#if 0
 ISR(TIMER1_COMPA_vect)
 {
   static bool is_recording = false;
@@ -169,7 +179,10 @@ ISR(TIMER1_COMPA_vect)
   #endif
 
 }
+#endif
 
+
+#if 0
 void calcSums(void)
 {
   for (uint8_t index = 0; index < BITS_PER_LINE; index++)
@@ -186,7 +199,7 @@ void calcSums(void)
     }
   }
 }
-
+#endif
 void convolute(void)
 {
   for (uint8_t idx = 0; idx < BITS_PER_LINE; idx++)
@@ -246,7 +259,7 @@ uint8_t findConvolutionMax()
   }
   return maxidx;
 }
-
+#if 0
 void writeBuffer(void)
 {
   uint8_t *ptr = recvd_bits;
@@ -262,12 +275,27 @@ void writeBuffer(void)
     Serial.write('\n');
   }
 }
-
+#endif
 // -------------------------------------------------------------------
 // Main loop
 // -------------------------------------------------------------------
 void loop()
 {
+  static uint8_t lastBuffer = 0;
+
+  uint8_t activeBuffer = Bits.getActiveBuffer();
+  if (activeBuffer != lastBuffer)
+  {
+    u8g2.firstPage();
+    do
+    {
+      u8g2.drawXBM(0, lastBuffer << 4, 100, 8, Bits.getBuffer(lastBuffer));
+    } while ( u8g2.nextPage() );
+
+    lastBuffer = activeBuffer;
+  }
+  
+  #if 0
   recording = true;
   while (recording)
   {
@@ -292,6 +320,6 @@ void loop()
   Serial.print("offset: ");
   Serial.println(sampling_offset, DEC);
   clearBuffer();
-
+#endif
 }
 
