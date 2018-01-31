@@ -76,10 +76,8 @@ ISR(TIMER1_COMPA_vect)
 }
 
 
-void calcSums(uint8_t buf)
+void calcSums(const uint8_t *pBuffer)
 {
-  uint8_t *pBuffer = Bits.getBuffer(buf);
-  
   for (uint8_t index = 0; index < BITS_PER_SEC; index++)
   {
     uint8_t byteidx = index >> 3;
@@ -178,12 +176,11 @@ void writeBuffer(void)
 // -------------------------------------------------------------------
 void loop()
 {
-  static uint8_t lastBuffer = 0;
-
-  uint8_t activeBuffer = Bits.getActiveBuffer();
-  if (activeBuffer != lastBuffer)
+  const uint8_t *buf = Bits.getBuffer();
+  
+  if (buf != NULL)
   {
-    calcSums(lastBuffer);
+    calcSums(buf);
     convolute();
     uint8_t m = findConvolutionMax();
     uint8_t m_ = m+20;
@@ -193,7 +190,7 @@ void loop()
     u8g2.setFont(u8g2_font_5x7_tf);
     do
     {
-      u8g2.drawXBM(0, lastBuffer << 3, 100, 8, Bits.getBuffer(lastBuffer));
+      u8g2.drawXBM(0, 0, 100, 8, buf);
       drawConvolution(20);
       u8g2.setCursor(2,50);
       u8g2.print(m);
@@ -202,10 +199,7 @@ void loop()
       u8g2.drawPixel(m+1, 19);
       u8g2.drawPixel(m_-1, 19);
     } while ( u8g2.nextPage() );
-
-   
-    
-    lastBuffer = activeBuffer;
+    Bits.clearBuffer();
   }
   
 }

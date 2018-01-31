@@ -1,10 +1,20 @@
 #include "Sampler.h"
 
+#define BUFFER_WAIT_SYNC    0
+#define BUFFER_FILLING      1
+#define BUFFER_FULL         2
 
 Sampler::Sampler(uint8_t SignalPin)
-: activeBuffer(0), signalPin(SignalPin), isrCounter(0), lineStart(0)
+: signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC)
 {
 
+}
+
+void Sampler::clearBuffer()
+{
+  sampleLine = 0;
+  memset(recvdBits, 0, sizeof(recvdBits));
+  bufferState = BUFFER_WAIT_SYNC;
 }
 
 void Sampler::sample()
@@ -12,11 +22,18 @@ void Sampler::sample()
   uint8_t sig = digitalRead(signalPin);
   digitalWrite(13, sig);
 
-  if (sig)
+  // still waiting for start of sampling period?
+  if ((bufferState == BUFFER_WAIT_SYNC) && (isrCounter == 0))
+  {
+    // start sampling
+    bufferState = BUFFER_FILLING;
+  }
+  
+  if ((sig) && (bufferState == BUFFER_FILLING))
   {
     uint8_t byteidx = isrCounter >> 3;
     uint8_t bitidx = isrCounter & 0x07;
-    recvdBits[activeBuffer][lineStart + byteidx] |= 1 << bitidx;
+    recvdBits[sampleLine][byteidx] |= 1 << bitidx;
   }
 
   // keep track of our position within a one second period
@@ -24,15 +41,23 @@ void Sampler::sample()
   if (isrCounter >= BITS_PER_SEC)
   {
     isrCounter = 0;
-    lineStart += BYTE_PER_SEC;
-    if (lineStart >= BYTE_PER_SEC*NUM_SECONDS)
+    sampleLine++;
+    if (sampleLine >= NUM_SECONDS)
     {
-      lineStart = 0;
-      activeBuffer ^= 1;
-      memset(&recvdBits[activeBuffer][0], 0, BYTE_PER_SEC*NUM_SECONDS);
+      bufferState = BUFFER_FULL;
     }
   }
+}
 
-
+const uint8_t* Sampler::getBuffer()
+{
+  if (bufferState == BUFFER_FULL)
+  {
+    return &recvdBits[0][0];
+  }
+  else
+  {
+    return NULL;
+  }
 }
 

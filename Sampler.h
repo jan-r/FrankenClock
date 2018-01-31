@@ -10,31 +10,23 @@
 // - 8 seconds == 8 * 13 byte == 104 byte
 #define NUM_SECONDS       8
 
-
 class Sampler
 {
 private:
-  uint8_t recvdBits[2][BYTE_PER_SEC * NUM_SECONDS];
+  uint8_t recvdBits[NUM_SECONDS][BYTE_PER_SEC];
   uint8_t activeBuffer;
   uint8_t signalPin;
   uint8_t isrCounter;
-  uint16_t lineStart;
+  uint8_t sampleLine;
+  uint8_t bufferState;
 
 
 public:
   Sampler(uint8_t SignalPin);
 
   void sample();
-  
-  uint8_t getActiveBuffer()
-  {
-    return activeBuffer;
-  }
-
-  uint8_t* getBuffer(uint8_t buf)
-  {
-    return &recvdBits[buf][0];
-  }
+  const uint8_t* getBuffer();
+  void clearBuffer();
 
 };
 
