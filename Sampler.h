@@ -20,6 +20,10 @@ private:
   uint8_t sampleLine;
   uint8_t bufferState;
 
+  uint8_t bitsums[BITS_PER_SEC];
+  uint8_t convolution[BITS_PER_SEC];
+  uint8_t currentMax;
+
 
 public:
   Sampler(uint8_t SignalPin);
@@ -27,7 +31,17 @@ public:
   void sample();
   const uint8_t* getBuffer();
   void clearBuffer();
+  void processBuffer();
 
+  const uint8_t* getConvolution() const
+  {
+    return convolution;
+  }
+
+  uint8_t getCurrentMax() const
+  {
+    return currentMax;
+  }
 };
 
 

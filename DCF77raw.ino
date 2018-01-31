@@ -75,82 +75,14 @@ ISR(TIMER1_COMPA_vect)
   Bits.sample();
 }
 
-
-void calcSums(const uint8_t *pBuffer)
-{
-  for (uint8_t index = 0; index < BITS_PER_SEC; index++)
-  {
-    uint8_t byteidx = index >> 3;
-    uint8_t bitidx = index & 0x07;
-    bitsums[index] = 0;
-    for (uint16_t line = 0; line < NUM_SECONDS * BYTE_PER_SEC; line+=BYTE_PER_SEC)
-    {
-      if (pBuffer[line + byteidx] & (1 << bitidx))
-      {
-        bitsums[index]++;
-      }
-    }
-  }
-}
-
-void convolute(void)
-{
-  for (uint8_t idx = 0; idx < BITS_PER_SEC; idx++)
-  {
-    uint16_t sum = 0;
-    for (uint8_t convidx = 0; convidx < 10; convidx++)
-    {
-      uint8_t localidx = idx + convidx;
-      if (localidx >= BITS_PER_SEC)
-      {
-        localidx -= BITS_PER_SEC;
-      }
-      sum += bitsums[localidx] << 1;
-    }
-    for (uint8_t convidx = 10; convidx < 20; convidx++)
-    {
-      uint8_t localidx = idx + convidx;
-      if (localidx >= BITS_PER_SEC)
-      {
-        localidx -= BITS_PER_SEC;
-      }
-      sum += bitsums[localidx];
-    }
-    convolution[idx] = sum;
-  }
-}
-
-void drawSums(uint16_t y)
-{
-  uint16_t base = y + 20;
-  for (uint16_t x = 0; x < BITS_PER_SEC; x++)
-  {
-    u8g2.drawPixel(x, base - bitsums[x]);
-  }
-}
-
 void drawConvolution(uint16_t y)
 {
   uint16_t base = y + 20;
+  const uint8_t *pConvolution = Bits.getConvolution();
   for (uint16_t x = 0; x < BITS_PER_SEC; x++)
   {
-    u8g2.drawPixel(x, base - (convolution[x] >> 4));
+    u8g2.drawPixel(x, base - (*(pConvolution + x) >> 4));
   }
-}
-
-uint8_t findConvolutionMax()
-{
-  uint16_t maxvalue = 0;
-  uint8_t maxidx = 0;
-  for (uint8_t idx = 0; idx < BITS_PER_SEC; idx++)
-  {
-    if (convolution[idx] > maxvalue)
-    {
-      maxvalue = convolution[idx];
-      maxidx = idx;
-    }
-  }
-  return maxidx;
 }
 
 #if 0
@@ -180,9 +112,8 @@ void loop()
   
   if (buf != NULL)
   {
-    calcSums(buf);
-    convolute();
-    uint8_t m = findConvolutionMax();
+    Bits.processBuffer();
+    uint8_t m = Bits.getCurrentMax();
     uint8_t m_ = m+20;
     if (m_ >= 100)
       m_ -= 100;

@@ -5,7 +5,7 @@
 #define BUFFER_FULL         2
 
 Sampler::Sampler(uint8_t SignalPin)
-: signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC)
+: signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC), currentMax(-1)
 {
 
 }
@@ -59,5 +59,56 @@ const uint8_t* Sampler::getBuffer()
   {
     return NULL;
   }
+}
+
+void Sampler::processBuffer()
+{
+  // sum up the bit values at each position over all seconds
+  for (uint8_t index = 0; index < BITS_PER_SEC; index++)
+  {
+    uint8_t byteidx = index >> 3;
+    uint8_t bitidx = index & 0x07;
+    bitsums[index] = 0;
+    for (uint8_t line = 0; line < NUM_SECONDS; line++)
+    {
+      if (recvdBits[line][byteidx] & (1 << bitidx))
+      {
+        bitsums[index]++;
+      }
+    }
+  }
+
+  // convolute the summed values with the expected signal
+  uint8_t maxidx = 0;
+  uint16_t maxvalue = 0;
+  for (uint8_t idx = 0; idx < BITS_PER_SEC; idx++)
+  {
+    uint16_t sum = 0;
+    for (uint8_t convidx = 0; convidx < 10; convidx++)
+    {
+      uint8_t localidx = idx + convidx;
+      if (localidx >= BITS_PER_SEC)
+      {
+        localidx -= BITS_PER_SEC;
+      }
+      sum += bitsums[localidx] << 1;
+    }
+    for (uint8_t convidx = 10; convidx < 20; convidx++)
+    {
+      uint8_t localidx = idx + convidx;
+      if (localidx >= BITS_PER_SEC)
+      {
+        localidx -= BITS_PER_SEC;
+      }
+      sum += bitsums[localidx];
+    }
+    convolution[idx] = sum;
+    if (sum > maxvalue)
+    {
+      maxidx = idx;
+      maxvalue = sum;
+    }
+  }
+  currentMax = maxidx;
 }
 
