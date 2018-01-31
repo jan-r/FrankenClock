@@ -24,6 +24,8 @@ private:
   uint8_t convolution[BITS_PER_SEC];
   uint8_t currentMax;
 
+  void PLL(void);
+  int16_t correctionTicks;
 
 public:
   Sampler(uint8_t SignalPin);
@@ -41,6 +43,11 @@ public:
   uint8_t getCurrentMax() const
   {
     return currentMax;
+  }
+
+  int16_t getCorrectionTicks()
+  {
+    return correctionTicks;
   }
 };
 

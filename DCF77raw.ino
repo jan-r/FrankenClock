@@ -24,6 +24,10 @@
 
 #define SERIAL_BAUDRATE   115200
 
+#define OCR1A_RELOAD_DEFAULT    20000
+
+uint16_t OCR1A_ReloadValue = OCR1A_RELOAD_DEFAULT;
+
 Sampler Bits(DCF77SIGNALPIN);
 
 // ----------------------------------------------------------------------------
@@ -32,10 +36,6 @@ Sampler Bits(DCF77SIGNALPIN);
 U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, DISP_CLOCK, DISP_DATA, U8X8_PIN_NONE);
 #define DISPLAY_RES_X   128
 #define DISPLAY_RES_Y   64
-
-
-uint8_t bitsums[100];
-uint8_t convolution[100];
 
 
 // ----------------------------------------------------------------------------
@@ -61,7 +61,7 @@ void setup()
   TCCR1A = 0;
   TCCR1B = (1 << WGM12); // enable CTC mode
   TCNT1 = 0;
-  OCR1A = 20000;
+  OCR1A = OCR1A_ReloadValue;
   TCCR1B |= (1 << CS11); // prescaler *8
   TIMSK1 |= (1 << OCIE1A);  // enable compare interrupt
   interrupts();
@@ -117,6 +117,10 @@ void loop()
     uint8_t m_ = m+20;
     if (m_ >= 100)
       m_ -= 100;
+    OCR1A_ReloadValue = OCR1A_RELOAD_DEFAULT + Bits.getCorrectionTicks();
+    noInterrupts();
+    OCR1A = OCR1A_ReloadValue;
+    interrupts(); 
     u8g2.firstPage();
     u8g2.setFont(u8g2_font_5x7_tf);
     do
@@ -125,6 +129,8 @@ void loop()
       drawConvolution(20);
       u8g2.setCursor(2,50);
       u8g2.print(m);
+      u8g2.setCursor(40,50);
+      u8g2.print(OCR1A_ReloadValue);
       u8g2.drawVLine(m, 17, 5);
       u8g2.drawVLine(m_, 17, 5);
       u8g2.drawPixel(m+1, 19);

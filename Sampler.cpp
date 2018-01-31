@@ -4,8 +4,11 @@
 #define BUFFER_FILLING      1
 #define BUFFER_FULL         2
 
+#define SAMPLE_SETPOINT     40
+#define MAX_CORRECTION     150
+
 Sampler::Sampler(uint8_t SignalPin)
-: signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC), currentMax(-1)
+: signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC), currentMax(-1), correctionTicks(0)
 {
 
 }
@@ -110,5 +113,21 @@ void Sampler::processBuffer()
     }
   }
   currentMax = maxidx;
+  PLL();
+}
+
+void Sampler::PLL()
+{
+  int16_t delta = currentMax - SAMPLE_SETPOINT;
+  int16_t prop = delta << 3;
+  if (prop > MAX_CORRECTION)
+  {
+    prop = MAX_CORRECTION;
+  }
+  else if (prop < -MAX_CORRECTION)
+  {
+    prop = -MAX_CORRECTION;
+  }
+  correctionTicks = prop;
 }
 
