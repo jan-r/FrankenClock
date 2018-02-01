@@ -1,4 +1,5 @@
 #include "DCF77Decoder.h"
+#include <Time.h>
 
 #define DEBUG_PRINT
 
@@ -98,5 +99,82 @@ void DCF77Decoder::dataReady()
   #ifdef DEBUG_PRINT
   Serial.write('!');
   #endif
+
+  if (checkRcvdStream())
+  {
+    //setTime(h, m, 0, d, mo, y);
+    Serial.write('*');
+  }
 }
+
+bool DCF77Decoder::checkParity(unsigned long bitsToCheck)
+{
+  char parity = 0;
+  for (char i = 0; i < 32; i++)
+  {
+    parity ^= bitsToCheck & 1;
+    bitsToCheck >>= 1;
+  }
+  return (parity == 0);
+}
+
+bool DCF77Decoder::checkRcvdStream()
+{
+  unsigned long bitsToCheck;
+  bool isOk = true;
+
+  // -----------------------------------------------------------------
+  // Parity checks
+  // -----------------------------------------------------------------
+  // minutes (bit 28:21)
+  bitsToCheck = bits[0] & 0x1FE00000UL;
+  if (!checkParity(bitsToCheck))
+  {
+    isOk = false;
+  }
+
+  // hours (bit 35:29)
+  bitsToCheck = (bits[0] & 0xE0000000UL) | (bits[1] & 0x0000000FUL);
+  if (!checkParity(bitsToCheck))
+  {
+    isOk = false;
+  }
+
+  // date (bit 58:36)
+  bitsToCheck = bits[1] & 0x7FFFFF0UL;
+  if (!checkParity(bitsToCheck))
+  {
+    isOk = false;
+  }
+#if 0
+  // -----------------------------------------------------------------
+  // Sanity checks
+  // -----------------------------------------------------------------
+  int val = minute();
+  if ((val < 0) || (val > 59))
+  {
+    isOk = false;
+  }
+
+  val = hour();
+  if ((val < 0) || (val > 23))
+  {
+    isOk = false;
+  }
+
+  val = day();
+  if ((val < 1) || (val > 31))
+  {
+    isOk = false;
+  }
+
+  val = month();
+  if ((val < 1) || (val > 12))
+  {
+    isOk = false;
+  }
+#endif
+  return isOk;
+}
+
 

@@ -17,6 +17,8 @@ private:
   uint32_t  bits[2];
 
   void dataReady();
+  bool checkParity(unsigned long bitsToCheck);
+  bool checkRcvdStream();
 };
 
 
