@@ -7,8 +7,9 @@
 #define SAMPLE_SETPOINT     40
 #define MAX_CORRECTION     150
 
-Sampler::Sampler(uint8_t SignalPin)
-: signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC), currentMax(-1), correctionTicks(0)
+Sampler::Sampler(uint8_t SignalPin, DCF77Decoder& decoder)
+: signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC), currentMax(-1),
+  correctionTicks(0), Decoder(decoder)
 {
 
 }
@@ -24,6 +25,40 @@ void Sampler::sample()
 {
   uint8_t sig = digitalRead(signalPin);
   digitalWrite(13, sig);
+
+  // feed the bit decoder if our signal is stable
+  if ((currentMax > 20) && (currentMax < 60))
+  {
+    if (isrCounter < currentMax)
+    {
+      bitCounter = 0;
+    }
+    else if (isrCounter < currentMax + 21)
+    {
+      bitCounter += sig;
+    }
+    else if (isrCounter == currentMax + 21)
+    {
+      if (bitCounter < 2)
+      {
+        Decoder.nextBit(NO_BIT);
+      }
+      else if ((bitCounter >= 6 ) && (bitCounter <= 13))
+      {
+        Decoder.nextBit(0);
+      }
+      else if (bitCounter > 15)
+      {
+        Decoder.nextBit(1);
+      }
+      else
+      {
+        Decoder.reset();
+        Serial.print(bitCounter);
+        Serial.write('\n');
+      }
+    }
+  }
 
   // still waiting for start of sampling period?
   if ((bufferState == BUFFER_WAIT_SYNC) && (isrCounter == 0))

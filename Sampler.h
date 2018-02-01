@@ -2,6 +2,7 @@
 #define SAMPLER_H
 
 #include <Arduino.h>
+#include "DCF77Decoder.h"
 
 // bit buffer:
 // - 100 measurements per second == 100 bits == 13 byte (4 bits unused)
@@ -19,6 +20,7 @@ private:
   uint8_t isrCounter;
   uint8_t sampleLine;
   uint8_t bufferState;
+  uint8_t bitCounter;
 
   uint8_t bitsums[BITS_PER_SEC];
   uint8_t convolution[BITS_PER_SEC];
@@ -27,8 +29,10 @@ private:
   void PLL(void);
   int16_t correctionTicks;
 
+  DCF77Decoder& Decoder;
+
 public:
-  Sampler(uint8_t SignalPin);
+  Sampler(uint8_t SignalPin, DCF77Decoder& decoder);
 
   void sample();
   const uint8_t* getBuffer();

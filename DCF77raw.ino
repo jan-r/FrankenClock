@@ -28,7 +28,8 @@
 
 uint16_t OCR1A_ReloadValue = OCR1A_RELOAD_DEFAULT;
 
-Sampler Bits(DCF77SIGNALPIN);
+DCF77Decoder Decoder;
+Sampler Bits(DCF77SIGNALPIN, Decoder);
 
 // ----------------------------------------------------------------------------
 // Display
