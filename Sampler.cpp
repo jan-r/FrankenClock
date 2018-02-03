@@ -5,7 +5,7 @@
 #define BUFFER_FULL         2
 
 #define SAMPLE_SETPOINT     40
-#define MAX_CORRECTION     150
+#define MAX_CORRECTION     250
 
 Sampler::Sampler(uint8_t SignalPin, DCF77Decoder& decoder)
 : signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC), currentMax(-1),

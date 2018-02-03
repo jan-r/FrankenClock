@@ -2,6 +2,10 @@
 #include <U8g2lib.h>
 #include <Time.h>
 
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
 #include "Sampler.h"
 
 #ifdef U8X8_HAVE_HW_SPI
@@ -39,13 +43,39 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, DISP_CLOCK, DISP_DATA, U8X8_PI
 #define DISPLAY_RES_X   128
 #define DISPLAY_RES_Y   64
 
+// ----------------------------------------------------------------------------
+// DHT22 sensor
+// ----------------------------------------------------------------------------
+#define DHTTYPE           DHT22     // DHT 22 (AM2302)
+DHT_Unified dht(DHTPIN, DHTTYPE);
+
+#define DEGREE '\xb0'               // degree symbol
+float fCurrentTemp = 99.9f;
+float fCurrentHumidity = 99.9f;
+
+// calibration
+#define REFERENCE_1     7.6f
+#define VALUE_1         7.0f
+#define REFERENCE_2     29.1f
+#define VALUE_2         30.4f
+float calibrationFactor = 1.0f;
+float calibrationOffset = 0.0f;
+
 
 // ----------------------------------------------------------------------------
 // Setup
 // ----------------------------------------------------------------------------
 void setup()
 {
+  // initialize display
   u8g2.begin();
+
+  // power up and initialize DHT22 sensor
+  pinMode(DHTPOWERPIN, OUTPUT);
+  digitalWrite(DHTPOWERPIN, HIGH);
+  delay(1000);
+  calibrate(REFERENCE_1, VALUE_1, REFERENCE_2, VALUE_2);
+  dht.begin();
 
   
   // initialize serial command interface
@@ -131,8 +161,8 @@ void loop()
       drawConvolution(20);
       u8g2.setCursor(2,50);
       u8g2.print(m);
-      u8g2.setCursor(40,50);
-      u8g2.print(OCR1A_ReloadValue);
+      //u8g2.setCursor(40,50);
+      //u8g2.print(OCR1A_ReloadValue);
       u8g2.drawVLine(m, 17, 5);
       u8g2.drawVLine(m_, 17, 5);
       u8g2.drawPixel(m+1, 19);
@@ -147,10 +177,84 @@ void loop()
         u8g2.print("0");
       }
       u8g2.print(minute(t));
-      
+
+      u8g2.setCursor(2, 62);
+      u8g2.print(String(fCurrentTemp, 1));
+      u8g2.print(DEGREE);
+      u8g2.print("C   ");
+      u8g2.print(String(fCurrentHumidity, 0));
+      u8g2.print("%");
     } while ( u8g2.nextPage() );
     Bits.clearBuffer();
   }
-  
+  updateSensors(millis());
 }
+
+// ----------------------------------------------------------------------------
+// Calculate calibration values calibrationFactor and calibrationOffset from
+// two measured values
+// ref1/ref2: reference temperatures
+// val1/val2: measured values at the given temperature
+// ----------------------------------------------------------------------------
+void calibrate(float ref1, float val1, float ref2, float val2)
+{
+  calibrationFactor = (ref2 - ref1) / (val2 - val1);
+  calibrationOffset = (val2 * ref1 - val1 * ref2) / (val2 - val1);
+}
+
+// ----------------------------------------------------------------------------
+// Fetch the current sensor values and update the global variables
+// fCurrentTemp and fCurrentHumidity.
+// ----------------------------------------------------------------------------
+void updateSensors(unsigned long currentTime)
+{
+  enum {POWERING_UP, MEASURING, SLEEPING};
+  static unsigned long lastStateChange = 0;
+  static char state = MEASURING;
+  sensors_event_t event;
+
+  // sensor state machine:
+  // - power up the sensor for 1000 ms to stabilize
+  // - take a measurement
+  // - power down the sensor for 9000 ms
+  switch (state)
+  {
+    case MEASURING:
+      dht.temperature().getEvent(&event);
+      if (!isnan(event.temperature))
+      {
+        fCurrentTemp = event.temperature * calibrationFactor + calibrationOffset;
+      }
+      dht.humidity().getEvent(&event);
+      if (!isnan(event.relative_humidity)) {
+        fCurrentHumidity = event.relative_humidity;
+      }
+//      trackHistory(currentTime);
+      // switch off the sensor
+      digitalWrite(DHTPOWERPIN, LOW);
+      state = SLEEPING;
+      lastStateChange = currentTime;
+      break;
+
+    case SLEEPING:
+      if ((currentTime - lastStateChange) >= 9000)
+      {
+        lastStateChange = currentTime;
+        state = POWERING_UP;
+      }
+      break;
+
+    case POWERING_UP:
+    default:
+      // enable sensor
+      digitalWrite(DHTPOWERPIN, HIGH);
+      if ((currentTime - lastStateChange) >= 1000)
+      {
+        lastStateChange = currentTime;
+        state = MEASURING;
+      }
+      break;
+  }
+}
+
 
