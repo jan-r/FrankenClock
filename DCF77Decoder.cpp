@@ -102,7 +102,28 @@ void DCF77Decoder::dataReady()
 
   if (checkRcvdStream())
   {
-    //setTime(h, m, 0, d, mo, y);
+    unsigned long timebits;
+    int hr, mnt;
+    int dy, mnth, yr;
+
+    // extract hour
+    timebits = (bits[0] >> 21) | (bits[1] << 11);
+    hr = ((timebits >> 8) & 0x0F) + 10 * ((timebits >> 12) & 0x03);
+
+    // extract minute
+    timebits = (bits[0] >> 21) | (bits[1] << 11);
+    mnt = (timebits & 0x0F) + 10 * ((timebits >> 4) & 0x07);
+
+    // extract day
+    dy = ((bits[1] >> 4) & 0xFU) + 10 * ((bits[1] >> 8) & 0x3);
+    
+    // extract month
+    mnth = ((bits[1] >> 13) & 0xFU) + 10 * ((bits[1] >> 17) & 0x1);
+
+    // extract year
+    yr = ((bits[1] >> 18) & 0xFU) + 10 * ((bits[1] >> 22) & 0xFU) + 2000;
+    
+    setTime(hr, mnt, 0, dy, mnth, yr);
     Serial.write('*');
   }
 }

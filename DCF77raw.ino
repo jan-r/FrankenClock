@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include <Time.h>
 
 #include "Sampler.h"
 
@@ -136,6 +137,17 @@ void loop()
       u8g2.drawVLine(m_, 17, 5);
       u8g2.drawPixel(m+1, 19);
       u8g2.drawPixel(m_-1, 19);
+
+      time_t t = now();
+      u8g2.setCursor(70, 50);
+      u8g2.print(hour(t));
+      u8g2.print(":");
+      if (minute(t) < 10)
+      {
+        u8g2.print("0");
+      }
+      u8g2.print(minute(t));
+      
     } while ( u8g2.nextPage() );
     Bits.clearBuffer();
   }
