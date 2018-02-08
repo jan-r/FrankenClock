@@ -15,7 +15,12 @@ about the DCF77 protocol or any of the other components I used.
 Project status:
 ---------------
 
-* Bit sampler is working, including a PLL that stabilizes the 
+* Bit sampler works, including a PLL that stabilizes the sampling window
+* Temperature and humidity measurement works
+* Display still only shows debug output
+
+* Still needs a full error-free DCF77 cycle (58 bits) to sync
+* No error correction yet, only error detection
 
 Components:
 -----------
