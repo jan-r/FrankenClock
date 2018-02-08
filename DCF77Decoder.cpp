@@ -62,8 +62,8 @@ void DCF77Decoder::nextBit(uint8_t value)
 
   if (index == -1)
   {
-    // decoding sequence not started yet, only accept NO_BIT
-    if (value == NO_BIT)
+    // decoding sequence not started yet, only accept NONE (pause)
+    if (value == DCF77_BIT_NONE)
     {
       // start of cycle
       index = 0;
@@ -76,7 +76,7 @@ void DCF77Decoder::nextBit(uint8_t value)
   else if (index == 0)
   {
     // first bit must always be 0, otherwise reception was disturbed
-    if (value == 0)
+    if (value == DCF77_BIT_0)
     {
       index++;
     }
@@ -88,7 +88,7 @@ void DCF77Decoder::nextBit(uint8_t value)
   else if (index == 20)
   {
     // bit 20 (start of time info) must always be 1
-    if (value == 1)
+    if (value == DCF77_BIT_1)
     {
       bits[0] |= 1UL << 20;
       index++;
@@ -100,21 +100,30 @@ void DCF77Decoder::nextBit(uint8_t value)
   }
   else
   {
-    if (value != NO_BIT)
+    switch (value)
     {
-      if (index >= 32)
-      {
-        bits[1] |= (unsigned long)value << (index - 32);
-      }
-      else if (index > 0)
-      {
-        bits[0] |= (unsigned long)value << index;
-      }
-      index++;  
-    }
-    else
-    {
-      reset();
+      case DCF77_BIT_0:
+      case DCF77_BIT_1:
+        if (index >= 32)
+        {
+          bits[1] |= (unsigned long)value << (index - 32);
+        }
+        else if (index > 0)
+        {
+          bits[0] |= (unsigned long)value << index;
+        }
+        index++;
+        break;
+
+      case DCF77_BIT_ERROR:
+        // TODO: handle error bits
+        index++;
+        break;
+        
+      case DCF77_BIT_NONE:
+      default:
+        reset();
+        break;
     }
   }
 

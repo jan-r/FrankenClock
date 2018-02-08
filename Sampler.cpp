@@ -78,21 +78,19 @@ void Sampler::sample()
     {
       if (bitCounter < 2)
       {
-        Decoder.nextBit(NO_BIT);
+        Decoder.nextBit(DCF77_BIT_NONE);
       }
       else if ((bitCounter >= 6 ) && (bitCounter <= 13))
       {
-        Decoder.nextBit(0);
+        Decoder.nextBit(DCF77_BIT_0);
       }
       else if (bitCounter > 15)
       {
-        Decoder.nextBit(1);
+        Decoder.nextBit(DCF77_BIT_1);
       }
       else
       {
-        Decoder.reset();
-        Serial.print(bitCounter);
-        Serial.write('\n');
+        Decoder.nextBit(DCF77_BIT_ERROR);
       }
     }
   }

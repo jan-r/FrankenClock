@@ -34,7 +34,11 @@
 
 #include <Arduino.h>
 
-#define NO_BIT    9
+#define DCF77_BIT_0       0
+#define DCF77_BIT_1       1
+#define DCF77_BIT_NONE    2
+#define DCF77_BIT_ERROR   3
+
 
 class DCF77Decoder
 {
