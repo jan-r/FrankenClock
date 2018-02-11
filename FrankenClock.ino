@@ -184,45 +184,82 @@ void loop()
     noInterrupts();
     OCR1A = OCR1A_ReloadValue;
     interrupts(); 
-    u8g2.firstPage();
-    u8g2.setFont(u8g2_font_5x7_tf);
-    do
+
+    time_t t = now();
+    if (year(t) > 2000)
     {
-      u8g2.drawXBM(0, 0, 100, 8, buf);
-      drawConvolution(20);
-      u8g2.setCursor(2,50);
-      u8g2.print(m);
-      //u8g2.setCursor(40,50);
-      //u8g2.print(OCR1A_ReloadValue);
-      u8g2.drawVLine(m, 17, 5);
-      u8g2.drawVLine(m_, 17, 5);
-      u8g2.drawPixel(m+1, 19);
-      u8g2.drawPixel(m_-1, 19);
-
-      time_t t = now();
-      u8g2.setCursor(70, 50);
-      u8g2.print(hour(t));
-      u8g2.print(":");
-      if (minute(t) < 10)
+      // clock seems to be in sync
+      u8g2.firstPage();
+      do
       {
-        u8g2.print("0");
-      }
-      u8g2.print(minute(t));
+        char buf[10];
+        String s = String(fCurrentTemp, 1);
+        s += ' ';
+        s += DEGREE;
+        s += 'C';
+        s.toCharArray(buf, sizeof(buf));
+    
+        u8g2.setFont(u8g2_font_fub14_tf);
+        u8g2.drawStr(0,15,buf);
 
-      u8g2.setCursor(70, 62);
-      u8g2.print(day(t));
-      u8g2.print(".");
-      u8g2.print(month(t));
-      u8g2.print(".");
-      u8g2.print(year(t));
+        s = String(fCurrentHumidity, 0);
+        s += '%';
+        s += " rH";
+        s.toCharArray(buf, sizeof(buf));
+        u8g2.drawStr(0,35,buf);
 
-      u8g2.setCursor(2, 62);
-      u8g2.print(String(fCurrentTemp, 1));
-      u8g2.print(DEGREE);
-      u8g2.print("C   ");
-      u8g2.print(String(fCurrentHumidity, 0));
-      u8g2.print("%");
-    } while ( u8g2.nextPage() );
+        u8g2.setCursor(0, 55);
+        u8g2.print(hour(t));
+        u8g2.print(":");
+        if (minute(t) < 10)
+        {
+          u8g2.print("0");
+        }
+        u8g2.print(minute(t));
+        
+      } while ( u8g2.nextPage() );
+    }
+    else
+    {
+      u8g2.firstPage();
+      u8g2.setFont(u8g2_font_5x7_tf);
+      do
+      {
+        u8g2.drawXBM(0, 0, 100, 8, buf);
+        drawConvolution(20);
+        u8g2.setCursor(2,50);
+        u8g2.print(m);
+        //u8g2.setCursor(40,50);
+        //u8g2.print(OCR1A_ReloadValue);
+        u8g2.drawVLine(m, 17, 5);
+        u8g2.drawVLine(m_, 17, 5);
+        u8g2.drawPixel(m+1, 19);
+        u8g2.drawPixel(m_-1, 19);
+  
+        u8g2.setCursor(70, 50);
+        u8g2.print(hour(t));
+        u8g2.print(":");
+        if (minute(t) < 10)
+        {
+          u8g2.print("0");
+        }
+        u8g2.print(minute(t));
+  
+        u8g2.setCursor(70, 62);
+        u8g2.print(day(t));
+        u8g2.print(".");
+        u8g2.print(month(t));
+        u8g2.print(".");
+        u8g2.print(year(t));
+  
+        u8g2.setCursor(2, 62);
+        u8g2.print(String(fCurrentTemp, 1));
+        u8g2.print(DEGREE);
+        u8g2.print("C   ");
+        u8g2.print(String(fCurrentHumidity, 0));
+        u8g2.print("%");
+      } while ( u8g2.nextPage() );
+    }
     Bits.clearBuffer();
   }
   updateSensors(millis());
