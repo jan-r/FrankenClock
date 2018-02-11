@@ -209,6 +209,13 @@ void loop()
       }
       u8g2.print(minute(t));
 
+      u8g2.setCursor(70, 62);
+      u8g2.print(day(t));
+      u8g2.print(".");
+      u8g2.print(month(t));
+      u8g2.print(".");
+      u8g2.print(year(t));
+
       u8g2.setCursor(2, 62);
       u8g2.print(String(fCurrentTemp, 1));
       u8g2.print(DEGREE);

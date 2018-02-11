@@ -49,11 +49,12 @@ public:
 
 private:
   int8_t    index;
-  uint32_t  bits[2];
+  uint32_t  bits[2];    // array for received bits
+  uint32_t  valid[2];   // array for bit status (1: bit is valid, 0: error)
 
-  void dataReady();
-  bool checkParity(unsigned long bitsToCheck);
-  bool checkRcvdStream();
+  void    dataReady();
+  bool    checkParity(unsigned long bitsToCheck);
+  uint8_t checkRcvdStream();
 };
 
 

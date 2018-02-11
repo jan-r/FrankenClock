@@ -35,6 +35,11 @@
 // define DEBUG_PRINT to get some serial debugging output
 //#define DEBUG_PRINT
 
+#define DCF77_STATUS_MINUTES_OK     (1 << 0)
+#define DCF77_STATUS_HOURS_OK       (1 << 1)
+#define DCF77_STATUS_DATE_OK        (1 << 2)
+
+
 DCF77Decoder::DCF77Decoder()
 {
   reset();
@@ -45,6 +50,8 @@ void DCF77Decoder::reset()
   index = -1;
   bits[0] = 0;
   bits[1] = 0;
+  valid[0] = 0;
+  valid[1] = 1;
 
   #ifdef DEBUG_PRINT
   Serial.write('\n');
@@ -79,6 +86,7 @@ void DCF77Decoder::nextBit(uint8_t value)
     if (value == DCF77_BIT_0)
     {
       index++;
+      valid[0] |= 1;
     }
     else
     {
@@ -91,6 +99,7 @@ void DCF77Decoder::nextBit(uint8_t value)
     if (value == DCF77_BIT_1)
     {
       bits[0] |= 1UL << 20;
+      valid[0] |= 1UL << 20;
       index++;
     }
     else
@@ -104,24 +113,29 @@ void DCF77Decoder::nextBit(uint8_t value)
     {
       case DCF77_BIT_0:
       case DCF77_BIT_1:
+      case DCF77_BIT_ERROR:
         if (index >= 32)
         {
           bits[1] |= (unsigned long)value << (index - 32);
+          if (value != DCF77_BIT_ERROR)
+          {
+            valid[1] |= 1 << (index - 32);
+          }
         }
         else if (index > 0)
         {
           bits[0] |= (unsigned long)value << index;
+          if (value != DCF77_BIT_ERROR)
+          {
+            valid[0] |= 1 << index;
+          }
         }
         index++;
         break;
 
-      case DCF77_BIT_ERROR:
-        // TODO: handle error bits
-        index++;
-        break;
-        
       case DCF77_BIT_NONE:
       default:
+        // start a new decoding cycle
         reset();
         break;
     }
@@ -135,34 +149,57 @@ void DCF77Decoder::nextBit(uint8_t value)
 
 }
 
+// ----------------------------------------------------------------------------
+// Handle received data
+// ----------------------------------------------------------------------------
 void DCF77Decoder::dataReady()
 {
   #ifdef DEBUG_PRINT
   Serial.write('!');
   #endif
 
-  if (checkRcvdStream())
+  uint8_t datastatus = checkRcvdStream();
+
+  #ifdef DEBUG_PRINT
+  Serial.write(datastatus + 0x30);
+  #endif
+
+  if (datastatus)
   {
-    unsigned long timebits;
-    int hr, mnt;
-    int dy, mnth, yr;
+    // there was at least one valid chunk of information
+  
+    time_t currentTime = now();
+    int hr = hour(currentTime);
+    int mnt = minute(currentTime);
+    int dy = day(currentTime);
+    int mnth = month(currentTime);
+    int yr   = year(currentTime);
 
-    // extract hour
-    timebits = (bits[0] >> 21) | (bits[1] << 11);
-    hr = ((timebits >> 8) & 0x0F) + 10 * ((timebits >> 12) & 0x03);
-
-    // extract minute
-    timebits = (bits[0] >> 21) | (bits[1] << 11);
-    mnt = (timebits & 0x0F) + 10 * ((timebits >> 4) & 0x07);
-
-    // extract day
-    dy = ((bits[1] >> 4) & 0xFU) + 10 * ((bits[1] >> 8) & 0x3);
+    if (datastatus & DCF77_STATUS_HOURS_OK)
+    {
+      // extract hour
+      unsigned long timebits = (bits[0] >> 21) | (bits[1] << 11);
+      hr = ((timebits >> 8) & 0x0F) + 10 * ((timebits >> 12) & 0x03);
+    }
     
-    // extract month
-    mnth = ((bits[1] >> 13) & 0xFU) + 10 * ((bits[1] >> 17) & 0x1);
-
-    // extract year
-    yr = ((bits[1] >> 18) & 0xFU) + 10 * ((bits[1] >> 22) & 0xFU) + 2000;
+    if (datastatus & DCF77_STATUS_MINUTES_OK)
+    {
+      // extract minute
+      unsigned long timebits = (bits[0] >> 21) | (bits[1] << 11);
+      mnt = (timebits & 0x0F) + 10 * ((timebits >> 4) & 0x07);
+    }
+  
+    if (datastatus & DCF77_STATUS_DATE_OK)
+    {
+      // extract day
+      dy = ((bits[1] >> 4) & 0xFU) + 10 * ((bits[1] >> 8) & 0x3);
+      
+      // extract month
+      mnth = ((bits[1] >> 13) & 0xFU) + 10 * ((bits[1] >> 17) & 0x1);
+  
+      // extract year
+      yr = ((bits[1] >> 18) & 0xFU) + 10 * ((bits[1] >> 22) & 0xFU) + 2000;
+    }
     
     setTime(hr, mnt, 0, dy, mnth, yr);
     #ifdef DEBUG_PRINT
@@ -171,6 +208,9 @@ void DCF77Decoder::dataReady()
   }
 }
 
+// ----------------------------------------------------------------------------
+// Check the given 32 bit word for even parity
+// ----------------------------------------------------------------------------
 bool DCF77Decoder::checkParity(unsigned long bitsToCheck)
 {
   char parity = 0;
@@ -182,34 +222,55 @@ bool DCF77Decoder::checkParity(unsigned long bitsToCheck)
   return (parity == 0);
 }
 
-bool DCF77Decoder::checkRcvdStream()
+
+// ----------------------------------------------------------------------------
+// Check which parts of the received stream were valid
+// ----------------------------------------------------------------------------
+uint8_t DCF77Decoder::checkRcvdStream()
 {
   unsigned long bitsToCheck;
-  bool isOk = true;
+  unsigned long validCheck;
+  uint8_t statusbits = 0;
 
   // -----------------------------------------------------------------
   // Parity checks
   // -----------------------------------------------------------------
   // minutes (bit 28:21)
   bitsToCheck = bits[0] & 0x1FE00000UL;
-  if (!checkParity(bitsToCheck))
+  validCheck  = valid[0] & 0x1FE00000UL;
+  if (validCheck == 0x1FE00000UL)
   {
-    isOk = false;
+    // all bits were valid, continue with parity check
+    if (checkParity(bitsToCheck))
+    {
+      statusbits |= DCF77_STATUS_MINUTES_OK;
+    }
   }
 
   // hours (bit 35:29)
   bitsToCheck = (bits[0] & 0xE0000000UL) | (bits[1] & 0x0000000FUL);
-  if (!checkParity(bitsToCheck))
+  validCheck =  (valid[0] & 0xE0000000UL) | (valid[1] & 0x0000000FUL);
+  if (validCheck == 0xE000000FUL)
   {
-    isOk = false;
+    // all bits were valid, continue with parity check
+    if (checkParity(bitsToCheck))
+    {
+      statusbits |= DCF77_STATUS_HOURS_OK;
+    }
   }
-
+  
   // date (bit 58:36)
   bitsToCheck = bits[1] & 0x7FFFFF0UL;
-  if (!checkParity(bitsToCheck))
+  validCheck = valid[1] & 0x7FFFFF0UL;
+  if (validCheck == 0x7FFFFF0UL)
   {
-    isOk = false;
+    // all bits were valid, continue with parity check
+    if (checkParity(bitsToCheck))
+    {
+      statusbits |= DCF77_STATUS_DATE_OK;
+    }
   }
+  
 #if 0
   // -----------------------------------------------------------------
   // Sanity checks
@@ -238,7 +299,7 @@ bool DCF77Decoder::checkRcvdStream()
     isOk = false;
   }
 #endif
-  return isOk;
+  return statusbits;
 }
 
 
