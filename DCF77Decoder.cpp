@@ -175,17 +175,15 @@ void DCF77Decoder::dataReady()
     int mnth = month(currentTime);
     int yr   = year(currentTime);
 
-    if (datastatus & DCF77_STATUS_HOURS_OK)
+    if (   (datastatus & DCF77_STATUS_HOURS_OK)
+        && (datastatus & DCF77_STATUS_MINUTES_OK) )
     {
       // extract hour
       unsigned long timebits = (bits[0] >> 21) | (bits[1] << 11);
       hr = ((timebits >> 8) & 0x0F) + 10 * ((timebits >> 12) & 0x03);
-    }
-    
-    if (datastatus & DCF77_STATUS_MINUTES_OK)
-    {
+
       // extract minute
-      unsigned long timebits = (bits[0] >> 21) | (bits[1] << 11);
+      timebits = (bits[0] >> 21) | (bits[1] << 11);
       mnt = (timebits & 0x0F) + 10 * ((timebits >> 4) & 0x07);
     }
   

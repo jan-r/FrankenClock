@@ -17,10 +17,11 @@ Project status:
 
 * Bit sampler works, including a PLL that stabilizes the sampling window
 * Temperature and humidity measurement works
-* Display still only shows debug output
+* Shows debug output until the first sync, then switches to time/temperature/humidity
 
-* Still needs a full error-free DCF77 cycle (58 bits) to sync
 * No error correction yet, only error detection
+* Bit length tolerance is far too wide, need to take some measurements under bad conditions
+  to fine-tune this
 
 Components:
 -----------
