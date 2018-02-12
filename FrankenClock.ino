@@ -171,21 +171,32 @@ void writeBuffer(void)
 // -------------------------------------------------------------------
 void loop()
 {
-  const uint8_t *buf = Bits.getBuffer();
+  const uint8_t *samplebuffer = Bits.getBuffer();
+  bool updateDisplay = false;
+  static int previousMinute = -1;
   
-  if (buf != NULL)
+  if (samplebuffer != NULL)
   {
     Bits.processBuffer();
-    uint8_t m = Bits.getCurrentMax();
-    uint8_t m_ = m+20;
-    if (m_ >= 100)
-      m_ -= 100;
     OCR1A_ReloadValue = OCR1A_RELOAD_DEFAULT + Bits.getCorrectionTicks();
     noInterrupts();
     OCR1A = OCR1A_ReloadValue;
-    interrupts(); 
+    interrupts();
 
-    time_t t = now();
+    // update display because a new sampling buffer was available
+    updateDisplay = true;
+  }
+
+  time_t t = now();
+  if (minute(t) != previousMinute)
+  {
+    // update display because a new minute has begun
+    previousMinute = minute(t);
+    updateDisplay = true;
+  }
+
+  if (updateDisplay)
+  {
     if (year(t) > 2000)
     {
       // clock seems to be in sync
@@ -225,17 +236,22 @@ void loop()
       u8g2.setFont(u8g2_font_5x7_tf);
       do
       {
-        u8g2.drawXBM(0, 0, 100, 8, buf);
-        drawConvolution(20);
-        u8g2.setCursor(2,50);
-        u8g2.print(m);
-        //u8g2.setCursor(40,50);
-        //u8g2.print(OCR1A_ReloadValue);
-        u8g2.drawVLine(m, 17, 5);
-        u8g2.drawVLine(m_, 17, 5);
-        u8g2.drawPixel(m+1, 19);
-        u8g2.drawPixel(m_-1, 19);
-  
+        if (samplebuffer != NULL)
+        {
+          uint8_t m = Bits.getCurrentMax();
+          uint8_t m_ = m+20;
+          if (m_ >= 100)
+            m_ -= 100;
+          u8g2.drawXBM(0, 0, 100, 8, samplebuffer);
+          drawConvolution(20);
+          u8g2.setCursor(2,50);
+          u8g2.print(m);
+          u8g2.drawVLine(m, 17, 5);
+          u8g2.drawVLine(m_, 17, 5);
+          u8g2.drawPixel(m+1, 19);
+          u8g2.drawPixel(m_-1, 19);
+        }
+          
         u8g2.setCursor(70, 50);
         u8g2.print(hour(t));
         u8g2.print(":");
@@ -260,7 +276,10 @@ void loop()
         u8g2.print("%");
       } while ( u8g2.nextPage() );
     }
-    Bits.clearBuffer();
+    if (samplebuffer != NULL)
+    {
+      Bits.clearBuffer();
+    }
   }
   updateSensors(millis());
 }
