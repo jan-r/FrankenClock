@@ -51,7 +51,7 @@ void DCF77Decoder::reset()
   bits[0] = 0;
   bits[1] = 0;
   valid[0] = 0;
-  valid[1] = 1;
+  valid[1] = 0;
 
   #ifdef DEBUG_PRINT
   Serial.write('\n');
