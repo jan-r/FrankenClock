@@ -41,6 +41,16 @@
 // define this to get a visual feedback on pin D13 (which is usually the on-board LED)
 //#define ECHO_SIGNAL_ON_PIN_13
 
+// define this to write the sampled bit length to the serial port
+//#define PRINT_BITLENGTH
+
+// Bit timing definitions
+#define SAMPLER_BIT_NONE_MAX    1     //  10 ms
+#define SAMPLER_BIT_ZERO_MIN    7     //  70 ms
+#define SAMPLER_BIT_ZERO_MAX    11    // 110 ms
+#define SAMPLER_BIT_ONE_MIN     18    // 180 ms
+
+
 Sampler::Sampler(uint8_t SignalPin, DCF77Decoder& decoder)
 : signalPin(SignalPin), isrCounter(0), sampleLine(0), bufferState(BUFFER_WAIT_SYNC), currentMax(-1),
   correctionTicks(0), Decoder(decoder)
@@ -76,15 +86,15 @@ void Sampler::sample()
     }
     else if (isrCounter == currentMax + 21)
     {
-      if (bitCounter < 2)
+      if (bitCounter <= SAMPLER_BIT_NONE_MAX)
       {
         Decoder.nextBit(DCF77_BIT_NONE);
       }
-      else if ((bitCounter >= 6 ) && (bitCounter <= 13))
+      else if ((bitCounter >= SAMPLER_BIT_ZERO_MIN ) && (bitCounter <= SAMPLER_BIT_ZERO_MAX))
       {
         Decoder.nextBit(DCF77_BIT_0);
       }
-      else if (bitCounter > 15)
+      else if (bitCounter > SAMPLER_BIT_ONE_MIN)
       {
         Decoder.nextBit(DCF77_BIT_1);
       }
@@ -92,6 +102,10 @@ void Sampler::sample()
       {
         Decoder.nextBit(DCF77_BIT_ERROR);
       }
+
+      #ifdef PRINT_BITLENGTH
+      Serial.println(bitCounter);
+      #endif
     }
   }
 
