@@ -44,11 +44,18 @@
 // define this to write the sampled bit length to the serial port
 //#define PRINT_BITLENGTH
 
+// define this to write a packed bitstream to the serial port
+//#define PRINT_BITSTREAM
+
 // Bit timing definitions
 #define SAMPLER_BIT_NONE_MAX    1     //  10 ms
 #define SAMPLER_BIT_ZERO_MIN    7     //  70 ms
 #define SAMPLER_BIT_ZERO_MAX    11    // 110 ms
 #define SAMPLER_BIT_ONE_MIN     18    // 180 ms
+
+#ifdef PRINT_BITSTREAM
+char hexchar[] = "0123456789ABCDEF";
+#endif
 
 
 Sampler::Sampler(uint8_t SignalPin, DCF77Decoder& decoder)
@@ -68,6 +75,19 @@ void Sampler::clearBuffer()
 void Sampler::sample()
 {
   uint8_t sig = digitalRead(signalPin);
+
+  #ifdef PRINT_BITSTREAM
+  static uint8_t bitnum = 0;
+  static uint8_t bits = 0;
+  bits = (bits << 1) | sig;
+  bitnum++;
+  if (bitnum >= 4)
+  {
+    Serial.write(hexchar[bits]);
+    bitnum = 0;
+    bits = 0;
+  }
+  #endif
 
   #ifdef ECHO_SIGNAL_ON_PIN_13
   digitalWrite(13, sig);
