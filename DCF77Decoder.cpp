@@ -30,7 +30,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "DCF77Decoder.h"
+
+#ifndef NOARDUINO
 #include <Time.h>
+#endif
 
 // define DEBUG_PRINT to get some serial debugging output
 //#define DEBUG_PRINT

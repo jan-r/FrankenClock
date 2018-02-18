@@ -29,38 +29,17 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef DCF77DECODER_H
-#define DCF77DECODER_H
-
-#ifndef NOARDUINO
-#include <Arduino.h>
-#else
 #include "NoArduinoStubs.h"
-#endif
 
-#define DCF77_BIT_0       0
-#define DCF77_BIT_1       1
-#define DCF77_BIT_NONE    2
-#define DCF77_BIT_ERROR   3
+time_t now() {return 0UL;};
+int hour(time_t t) {return 0;};
+int minute(time_t t) {return 0;};
+int day(time_t t) {return 0;};
+int month(time_t t) {return 0;};
+int year(time_t t) {return 0;};
+void setTime(int h, int m, int s, int d, int mo, int y) {};
 
-
-class DCF77Decoder
+int main(void)
 {
-public:
-  DCF77Decoder();
-  void reset();
-  void nextBit(uint8_t value);
-
-private:
-  int8_t    index;
-  uint32_t  bits[2];    // array for received bits
-  uint32_t  valid[2];   // array for bit status (1: bit is valid, 0: error)
-
-  void    dataReady();
-  bool    checkParity(unsigned long bitsToCheck);
-  uint8_t checkRcvdStream();
-};
-
-
-#endif
+}
 
