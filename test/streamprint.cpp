@@ -41,68 +41,50 @@
  * be represented as 'A'. A zero bit will be visualized as '.' and a one bit
  * as '*'. Therefore, the stream 03FFC0 will be visualized as
  * ......************......
- *
- * Compile with: g++ -Wall -g -o streamprint streamprint.cpp
  */ 
 
 #include <cstdio>
 #include <cstdlib>
+#include "StreamReader.h"
 
 int main(int argc, char** argv)
 {
+  StreamReader *sr;
+
   if (argc != 2)
   {
     fprintf(stderr, "Usage: streamprint streamlog.txt\n");
     return EXIT_FAILURE;
   }
 
-  FILE *fh = fopen(argv[1], "r");
-  if (NULL == fh)
+  try
   {
-    fprintf(stderr, "*** error opening file\n");
+    sr = new StreamReader(argv[1]);
+  }
+  catch (const std::runtime_error& e)
+  {
+    fprintf(stderr, "*** error: %s\n", e.what());
     return EXIT_FAILURE;
   }
-
-  int c;
+  
+  int value;
   int bitcounter = 0;
-
-  // read all characters from file
-  while ( (c = fgetc(fh)) != EOF)
+  while ((value = sr->getNextSample()) >= 0)
   {
-    // convert hexadecimal character back to integer value (0-15)
-    int value;
-    if ((c >= '0') && (c <= '9'))
+    if (value)
     {
-      value = c - '0';
+      putchar('*');
     }
-    else if ((c >= 'A') && (c <= 'F'))
+    else
     {
-      value = 10 + c - 'A';
-    }
-    else if ((c >= 'a') && (c <= 'f'))
-    {
-      value = 10 + c - 'a';
+      putchar('.');
     }
 
-    // print as four individual bits, MSB first
-    for (int i = 0; i < 4; i++)
+    // add a line break every 100 bits
+    if (++bitcounter >= 100)
     {
-      if (value & (1<<3))
-      {
-        putchar('*');
-      }
-      else
-      {
-        putchar('.');
-      }
-      value <<= 1;
-
-      // add a line break every 100 bits
-      if (++bitcounter >= 100)
-      {
-        bitcounter = 0;
-        putchar('\n');
-      }
+      bitcounter = 0;
+      putchar('\n');
     }
   }
   putchar('\n');
