@@ -31,13 +31,12 @@
  */
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include <DCF77.h>
 #include <Time.h>
 
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
-
-#include "Sampler.h"
 
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -50,22 +49,18 @@
 // ----------------------------------------------------------------------------
 // Hardware setup
 // ----------------------------------------------------------------------------
-#define DHTPIN            2         // Pin which is connected to the DHT sensor.
+#define DHTPIN            6         // Pin which is connected to the DHT sensor.
 #define DHTPOWERPIN       3         // Pin which supplies the DHT sensor with power.
 #define DCF77POWERPIN     4         // Pin to control power of the DCF77 module (low == on)
-#define DCF77SIGNALPIN    5         // Pin which connects to the DCF77 time signal 
+#define DCF77SIGNALPIN    2         // Pin which connects to the DCF77 time signal 
+#define DCF77INTERRUPT    0         // Interrupt number associated with pin
+
 #define DBGLEDPIN         13
 #define DISP_DATA         A4        // HW I2C data line to display
 #define DISP_CLOCK        A5        // HW I2C clock line to display
 
 #define SERIAL_BAUDRATE   115200
 
-#define OCR1A_RELOAD_DEFAULT    20000
-
-uint16_t OCR1A_ReloadValue = OCR1A_RELOAD_DEFAULT;
-
-DCF77Decoder Decoder;
-Sampler Bits(DCF77SIGNALPIN, Decoder);
 
 // ----------------------------------------------------------------------------
 // Display
@@ -91,6 +86,11 @@ float fCurrentHumidity = 99.9f;
 #define VALUE_2         30.4f
 float calibrationFactor = 1.0f;
 float calibrationOffset = 0.0f;
+
+// ----------------------------------------------------------------------------
+// DCF77 receiver
+// ----------------------------------------------------------------------------
+DCF77 DCF = DCF77(DCF77SIGNALPIN,DCF77INTERRUPT);
 
 
 // ----------------------------------------------------------------------------
@@ -120,32 +120,10 @@ void setup()
   delay(1000);
   digitalWrite(DCF77POWERPIN, LOW);
 
-  noInterrupts();
-  TCCR1A = 0;
-  TCCR1B = (1 << WGM12); // enable CTC mode
-  TCNT1 = 0;
-  OCR1A = OCR1A_ReloadValue;
-  TCCR1B |= (1 << CS11); // prescaler *8
-  TIMSK1 |= (1 << OCIE1A);  // enable compare interrupt
-  interrupts();
-}
+  DCF.Start();
+  setSyncInterval(30);
+  setSyncProvider(getDCFTime);
 
-// -------------------------------------------------------------------
-// Cyclic sampling ISR
-// -------------------------------------------------------------------
-ISR(TIMER1_COMPA_vect)
-{
-  Bits.sample();
-}
-
-void drawConvolution(uint16_t y)
-{
-  uint16_t base = y + 20;
-  const uint8_t *pConvolution = Bits.getConvolution();
-  for (uint16_t x = 0; x < BITS_PER_SEC; x++)
-  {
-    u8g2.drawPixel(x, base - (*(pConvolution + x) >> 4));
-  }
 }
 
 #if 0
@@ -171,22 +149,9 @@ void writeBuffer(void)
 // -------------------------------------------------------------------
 void loop()
 {
-  const uint8_t *samplebuffer = Bits.getBuffer();
   bool updateDisplay = false;
   static int previousMinute = -1;
   
-  if (samplebuffer != NULL)
-  {
-    Bits.processBuffer();
-    OCR1A_ReloadValue = OCR1A_RELOAD_DEFAULT + Bits.getCorrectionTicks();
-    noInterrupts();
-    OCR1A = OCR1A_ReloadValue;
-    interrupts();
-
-    // update display because a new sampling buffer was available
-    updateDisplay = true;
-  }
-
   time_t t = now();
   if (minute(t) != previousMinute)
   {
@@ -197,29 +162,32 @@ void loop()
 
   if (updateDisplay)
   {
-    if (year(t) > 2000)
+    u8g2.firstPage();
+    do
     {
-      // clock seems to be in sync
-      u8g2.firstPage();
-      do
+      char buf[10];
+      String s = String(fCurrentTemp, 1);
+      s += ' ';
+      s += DEGREE;
+      s += 'C';
+      s.toCharArray(buf, sizeof(buf));
+  
+      u8g2.setFont(u8g2_font_fub14_tf);
+      u8g2.drawStr(0,15,buf);
+
+      s = String(fCurrentHumidity, 0);
+      s += '%';
+      s += " rH";
+      s.toCharArray(buf, sizeof(buf));
+      u8g2.drawStr(0,35,buf);
+
+      u8g2.setCursor(0, 55);
+      if (timeStatus()== timeNotSet)
       {
-        char buf[10];
-        String s = String(fCurrentTemp, 1);
-        s += ' ';
-        s += DEGREE;
-        s += 'C';
-        s.toCharArray(buf, sizeof(buf));
-    
-        u8g2.setFont(u8g2_font_fub14_tf);
-        u8g2.drawStr(0,15,buf);
-
-        s = String(fCurrentHumidity, 0);
-        s += '%';
-        s += " rH";
-        s.toCharArray(buf, sizeof(buf));
-        u8g2.drawStr(0,35,buf);
-
-        u8g2.setCursor(0, 55);
+        u8g2.print("--:--");
+      }
+      else
+      {
         u8g2.print(hour(t));
         u8g2.print(":");
         if (minute(t) < 10)
@@ -227,59 +195,8 @@ void loop()
           u8g2.print("0");
         }
         u8g2.print(minute(t));
-        
-      } while ( u8g2.nextPage() );
-    }
-    else
-    {
-      u8g2.firstPage();
-      u8g2.setFont(u8g2_font_5x7_tf);
-      do
-      {
-        if (samplebuffer != NULL)
-        {
-          uint8_t m = Bits.getCurrentMax();
-          uint8_t m_ = m+20;
-          if (m_ >= 100)
-            m_ -= 100;
-          u8g2.drawXBM(0, 0, 100, 8, samplebuffer);
-          drawConvolution(20);
-          u8g2.setCursor(2,50);
-          u8g2.print(m);
-          u8g2.drawVLine(m, 17, 5);
-          u8g2.drawVLine(m_, 17, 5);
-          u8g2.drawPixel(m+1, 19);
-          u8g2.drawPixel(m_-1, 19);
-        }
-          
-        u8g2.setCursor(70, 50);
-        u8g2.print(hour(t));
-        u8g2.print(":");
-        if (minute(t) < 10)
-        {
-          u8g2.print("0");
-        }
-        u8g2.print(minute(t));
-  
-        u8g2.setCursor(70, 62);
-        u8g2.print(day(t));
-        u8g2.print(".");
-        u8g2.print(month(t));
-        u8g2.print(".");
-        u8g2.print(year(t));
-  
-        u8g2.setCursor(2, 62);
-        u8g2.print(String(fCurrentTemp, 1));
-        u8g2.print(DEGREE);
-        u8g2.print("C   ");
-        u8g2.print(String(fCurrentHumidity, 0));
-        u8g2.print("%");
-      } while ( u8g2.nextPage() );
-    }
-    if (samplebuffer != NULL)
-    {
-      Bits.clearBuffer();
-    }
+      }      
+    } while ( u8g2.nextPage() );
   }
   updateSensors(millis());
 }
@@ -351,4 +268,12 @@ void updateSensors(unsigned long currentTime)
   }
 }
 
-
+unsigned long getDCFTime()
+{ 
+  time_t DCFtime = DCF.getTime();
+  // Indicator that a time check is done
+  if (DCFtime!=0) {
+    Serial.print("X");  
+  }
+  return DCFtime;
+}

@@ -1,1 +1,4 @@
 test/streamprint
+test/*.o
+test/dcf77dec
+
